@@ -1,0 +1,31 @@
+# 模型权重与大型文件（不要提交）
+*.gguf
+*.pth
+*.safetensors
+*.7z
+*.zip
+models/
+
+# 编译产物
+llama-rwkv-pr1/
+build/
+*.so
+*.o
+*.a
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# 运行产物
+logs/
+results_*.json
+!results/rwkv7_g1j_2p9b/*.json
+
+# 编辑器/系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

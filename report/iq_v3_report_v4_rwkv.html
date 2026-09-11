@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>端侧模型能力基准测试v3（xLeaves Benchmark v3）</title>
+<style>
+ body{font-family:"Segoe UI","Microsoft YaHei",sans-serif;margin:0;background:#0f1419;color:#e6e6e6;padding:24px}
+ h1{font-size:22px} h2{font-size:17px;margin:28px 0 12px;border-left:4px solid #4f9cf9;padding-left:10px}
+ .meta{color:#9aa4b2;font-size:13px}
+ .panel{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0;background:#161d26;padding:12px;border-radius:10px}
+ .ck{display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:14px;background:#1f2833;font-size:13px;cursor:pointer;user-select:none}
+ .ck input{accent-color:#4f9cf9}
+ .ck .dot{width:10px;height:10px;border-radius:50%}
+ .ck.off{opacity:.38}
+ .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+ .card{background:#161d26;border-radius:12px;padding:12px;text-align:center}
+ .card h3{margin:4px 0 8px;font-size:14px;color:#cfd8e3}
+ table{border-collapse:collapse;width:100%;font-size:13px;background:#161d26;border-radius:10px;overflow:hidden}
+ th,td{padding:7px 10px;border-bottom:1px solid #232d3a;text-align:center}
+ th{background:#1c2634;color:#9fc3f7;cursor:pointer;white-space:nowrap}
+ td.l{text-align:left;white-space:nowrap}
+ tr:hover td{background:#1c2634}
+ .bar{height:8px;border-radius:4px;background:#2a3648;position:relative;min-width:70px}
+ .bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+ .legend{font-size:12px;color:#9aa4b2;margin-top:6px}
+ .rank1{color:#ffd700;font-weight:600}.rank2{color:#c0c0c0}.rank3{color:#cd7f32}
+</style>
+</head>
+<body>
+<h1>🧠 端侧模型能力基准测试v3（xLeaves Benchmark v3）</h1>
+<div class="meta" id="meta"></div>
+<details open style="background:#161d26;padding:12px 14px;border-radius:10px;margin:10px 0;font-size:13px;line-height:1.8">
+<summary style="cursor:pointer;color:#9fc3f7;font-size:14px;font-weight:600">📐 测试方法说明（点击折叠）</summary>
+<div style="color:#c2ccd8">
+<b>题库</b>：iq_bank_v3，共 200 题，七个类别——Agent 能力 / 编码 / 数学 / 对话 / 脑筋急转弯 / 长上下文 / 其他，权重 20/20/20/10/10/10/10；难度 1-10 阶梯（easy 100 题 / medium 50 题 / hard 50 题）。题面自带日期锚点（避免模型不知日期），长上下文题由固定种子确定性生成、字节级可回归。<br>
+<b>执行</b>：每个模型独立起推理服务（llama-server，开启 --jinja 工具协议），由统一评测 harness 逐题请求。Agent 题走真实 OpenAI tools 协议多轮调用（工具返回为预设罐头结果，验证调用链与参数构造）；编码题提取代码后<b>实际执行隐藏测试用例</b>判分；数学题核对"最终答案"行；其余按关键词组命中判分。<br>
+<b>采集</b>：每题得分、耗时、token 用量与模型原始输出随做随落盘（results_v3_*.json），网页报告由守望进程每分钟自动重建——每测完一个模型，本页 1 分钟内即更新。<br>
+<b>比分修正</b>：全部模型测完后，由可靠大模型作为阅卷人，<b>在同一上下文状态下逐题复核所有非满分回答的原始输出</b>，识别"回答正确或更优、但被机械判分冤枉"的情形并按回答质量修正，raw 与 corrected 双分透明、修正理由留档，以此增加可信度（参照组自评仅做保守机械纠错并单独标注）。
+</div></details>
+<details open style="background:#161d26;padding:12px 14px;border-radius:10px;margin:10px 0;font-size:13px;line-height:1.8">
+<summary style="cursor:pointer;color:#9fc3f7;font-size:14px;font-weight:600">📋 测试参数说明（点击折叠）</summary>
+<div style="color:#c2ccd8">
+<b>采样</b>：temperature 0.2（对话类 0.7）· top_p 0.95 · repeat_penalty 未启用（默认 1.0）· max_tokens 8192。<br>
+<b>上下文</b>：KV 缓存统一 Q8_0 量化 · 上下文窗口 49152。<br>
+<b>量化档</b>：仅测试 <b>Q4_K_M（下文简称 Q4，有损档）</b>与 <b>Q8_0（下文简称 Q8，无损档）</b>两个档位。不测 F16——端侧显存与带宽资源紧张，F16 的体积和速度代价不现实；不测 Q6_K（Q6）——部分推理硬件（如 Vulkan 后端）对 Q6_K 内核支持不全、存在性能断崖，且其质量档位与 Q8 同处高原区，可参考 Q8 成绩。<br>
+<b>理由</b>：单一变量原则——所有模型同题库、同采样、同 token 预算，使分数差异只反映模型能力。温度取全池官方推荐交集的低区间，高温会引入采样噪声、让排名在重跑间漂移；8192 为思考型与普通模型的折中（4096 会截断思考链）。<br>
+<b>已知偏差声明</b>：① RWKV-World 官方 demo 的解码方式与本协议不同（temp 1 · top_p 0.5 · presence 1 · count 0.1 · decay 0.99，并关闭思维链）；本协议统一低温下 RWKV 存在重复循环风险，故表中 RWKV 行<b>应视为下界</b>。经补充实测 RWKV7-G1j-2.9B Q4 在官方解码下为 <b>44.2 分（500/关思考）</b>、48.3 分（8192/开思考），均高于本协议下的 41.2，<b>下界判断成立</b>；解码口径差异见表中 · 官方demo/demo采样 各行<br>② <b>RWKV7-G1j-2.9B 的 Q4_K_M 档属量化受损，不适用本报告「≥5bpw 质量高原区」的档位假设</b>：同模型换 <b>Q8_0</b>、同官方解码口径复测，总分 <b>44.2 → 64.1（+19.9）</b>，撞 500 token 上限的题数 <b>90/200 → 39/200</b>，coding 41.2% → 80.0%、math 30.0% → 57.5%。Q4 档下 82% 的题无法输出终止符而跑满预算，属<b>量化破坏了终止行为</b>，非模型能力差异；该模型应以表中 <b>· Q8 · 官方demo</b> 一行为准；② 个别思考型微调变体在 8192 预算内思考链可能无法终止，属协议约束下的真实行为；③ 量化档随模型略有差异（表中已标注），均为 ≥5bpw 质量高原区档位；④ 比分修正已对称执行完毕（规则 A/B/C：基础设施故障题剔除分母、虚构陷阱题非编造响应记满分、药店题专业分诊行为记满分；每模型修正 0-2 处、理由留档 corrections_v3.json），<b>修正后总分（★ 列）为最终成绩</b>。
+</div></details>
+<details style="background:#161d26;padding:12px 14px;border-radius:10px;margin:10px 0;font-size:13px;line-height:1.8">
+<summary style="cursor:pointer;color:#9fc3f7;font-size:14px;font-weight:600">❓ 疑义问答说明（点击展开）</summary>
+<div style="color:#c2ccd8">
+<p><b>Q：为什么有些模型 Q4 量化的成绩反而比 Q8 更好？</b><br>
+A：大模型测试存在随机性。整个跑测历时约三天，无法进行多轮测试取均值（均值至少需要 10 次才有统计学说服力），因此只采用单次成绩——这不代表 Q4 优于 Q8。我也不会针对 Q8 反复重测直到它超过 Q4：一旦存在这种操作空间，就意味着我可以"让特定模型必须高于其他模型"，这是基准测试绝对不能允许的。一次成绩定格成什么样就是什么样，公平才有意义。</p>
+<p><b>Q：为什么云端大模型的跑分甚至不如某些端侧模型？</b><br>
+A：大模型的"大"其实要打个问号——很多大模型的激活参数并不占绝对优势。更重要的是，本评测题目整体偏简单，仅针对端侧模型能力范围构建，没有施加很大压力（所以大家分数普遍偏高）。这份评测的目标不只是找出最好的端侧模型，而是找出<b>最具性价比</b>的端侧模型——题目并不针对旗舰模型的能力覆盖出题，大模型的深度能力得不到完整发挥，分数不高、甚至不如某些端侧模型是合理的（况且某些大模型确实也测出了问题）。</p>
+<p><b>Q：我想申请模型重测可以吗？</b><br>
+A：不可以。这个基准测试虽然是个野鸡榜，但测试是一次性的：测完不重测，后续也不更新榜单。作为 AI 工作者，拿验证集做训练数据的情况见得不少了——重测意味着不公平，意味着模型可以通过针对性训练刷分。本评测发布后成绩冻结，永不更新。</p>
+<p><b>Q：这份基准测试未来还会更新吗？</b><br>
+A：不会。更新意味着所有题目全部推翻、重新设计生成，工作量巨大，而我不愿意降低标准用同一套题反复测。而且评测有时并不能说明问题——93 分真的比 95 分差吗？噪声区间内的分差没有实际意义，只有数量级差距才有意义。大家可以用这份评测粗浅评估新模型的能力，但需要独立思考，不可全信。客观的基准测试需要大量精力来避免分数失真，我只会每隔一段时间做一次，不会持续维护；我鼓励大家参与基准测试这项工作，这样在挑选模型时才有更多数据支持部署决策。</p>
+<p><b>Q：这份基准测试存在哪些问题？</b><br>
+A：野鸡榜单，问题不少：仅针对中文测试；简单题目占比更高（对 4-9B 级模型更友好）。但总的来说这是由它的定位决定的。我鼓励大家基于自己的实际场景做更多客观测试。这份榜单想得出的核心结论是：<b>在硬件资源有限的条件下，选择哪个模型能更充分地发挥硬件的效率和能力。</b></p>
+<p><b>Q：有推荐的模型吗？</b><br>
+A：我不想打广告（也没人给钱），但我会推荐两个：<b>Ling-3.0-tiny</b>（极低的上下文显存开销和激活参数，合理的智力水平）和 <b>Ornith-1.5-35B-A3B</b>（较小的运算压力和较高的智力水平）——它们在资源受限条件下工作良好，在自身能力分段内表现卓越，智力与知识储备都相当不错，也许未来端侧小型 MoE 就是版本答案。如果硬件足够好，<b>Qwen3.8-27B</b> 能获得堪比云端大模型的体验，但 dense 模型推理速度较慢。</p>
+</div></details>
+<details open style="background:#161d26;padding:12px 14px;border-radius:10px;margin:10px 0;font-size:13px;line-height:1.8">
+<summary style="cursor:pointer;color:#9fc3f7;font-size:14px;font-weight:600">📊 统计学趣味分析（点击折叠）</summary>
+<div style="color:#c2ccd8">
+<p><b>1. 勤勉-速度轴（diligence vs. velocity）</b>：模型存在明显的两种风格，可通过总榜"耗时"列分辨。勤勉型模型（如 MiniCPM5-2B、Qwen3.5 家族）会更多搜集证据、有实锤后才下结论——长文计数题愿意逐条数完，但推理更慢；速度型模型更注重整体效率，在要求"用笨方法解决"的题目上倾向直接猜测答案（云端模型同样如此，GLM 参照组的长上下文失分即为此类）。</p>
+<p><b>2. Ornith 的后训练是"速度型强化"</b>：Ornith 系后训模型在更难的题目上表现更好、简单题略逊于原版底座，且推理速度大幅提升（35B 版 MTP 投机解码加持）。综合看，相对原版整体是加强的——代价是对话与通识类小幅回撤，收益是硬推理与速度。</p>
+<p><b>3. MiniCPM5 的社区微调变体几乎全线扑街</b>：三个变体两个崩、一个平庸，还贡献了全场唯一"未完赛"案例（1B-anti-hallucination 仅 40 题确证即弃）。建议选择社区模型时不要被介绍页洗脑，先小规模评测再决定是否采用。</p>
+<p><b>4. 去审查（de-censoring）的能力代价真实但轻微</b>：同源对照显示，去审查版在复杂问题上有损失，但幅度不大（Heretic 与原版总分差在噪声带内）。是否采用去审查版本，应结合自身需求决定，不必担心智力大幅受损。</p>
+</div></details>
+<h2>模型勾选（雷达图环比）</h2>
+<div class="panel" id="cks"></div>
+<div class="card" style="max-width:760px;margin:0 auto"><h3>七维智力雷达</h3><div id="radar"></div>
+<div class="legend">每层多边形 = 一个勾选模型 · 悬停查看数值 · 建议同时对比 ≤6 个模型</div></div>
+<h2>勾选模型对比表</h2>
+<table id="cmp"></table>
+<h2>参照组（点击表头排序）</h2>
+<p class="meta" style="margin:-6px 0 10px">题库仅针对端侧模型能力范围构建，参照组成绩仅用于参考端侧模型距离云端模型的能力差距（简单任务范畴内），不代表云侧模型的真实水平，因为本基准测试的题目都是针对端侧模型能力范围设置的，不能完整体现云侧模型的全部能力，对于非常复杂任务来说，云侧模型仍有不可替代的作用。</p>
+<table id="refboard"></table>
+<h2>完整总榜（点击表头排序）</h2>
+<table id="board"></table>
+<p class="meta">雷达图：7 轴=7 类别得分率；鼠标悬停看数值。†=仅40题确证；RWKV-g1j 与 Qwen3.5/3.6-35B 原版测完后重新生成本报告。RWKV7-G1j-2.9B Q4 另有 4 行解码口径对照（· demo采样 / · 官方demo），为同一题目、各 200 题的独立跑测，原始成绩 41.2 行保持不变。</p>
+<script>
+const DATA = [{"name": "DeepSeek-V4.1-Flash API 参照", "color": "#1e90ff", "total": 95.9, "cats": {"agent": 96.2, "coding": 97.5, "math": 98.8, "dialogue": 85.0, "ruozhiba": 95.0, "longctx": 96.7, "other": 97.5}, "ref": true, "totalC": 96.7, "easy": 95.8, "med": 98.6, "hard": 92.4, "mins": 22, "nq": 200}, {"name": "Qwen3.5-35B-A3B Q5", "color": "#ff6666", "total": 96.0, "cats": {"agent": 89.8, "coding": 98.8, "math": 97.5, "dialogue": 93.3, "ruozhiba": 95.0, "longctx": 100.0, "other": 100.0}, "ref": false, "totalC": 96.3, "easy": 97.2, "med": 93.1, "hard": 93.8, "mins": 114, "nq": 200}, {"name": "GLM-5.3 API 参照", "color": "#ffffff", "total": 95.3, "cats": {"agent": 95.7, "coding": 100.0, "math": 97.5, "dialogue": 87.5, "ruozhiba": 97.5, "longctx": 86.7, "other": 95.0}, "ref": true, "totalC": 95.8, "easy": 94.4, "med": 97.2, "hard": 97.8, "mins": 85, "nq": 200}, {"name": "Ornith-35B原版 Q4", "color": "#33cc99", "total": 94.8, "cats": {"agent": 97.5, "coding": 98.8, "math": 100.0, "dialogue": 85.0, "ruozhiba": 95.0, "longctx": 85.0, "other": 90.0}, "ref": false, "totalC": 95.5, "easy": 93.6, "med": 97.2, "hard": 97.9, "mins": 44, "nq": 200}, {"name": "Qwen3.8-27B-Unc Q5", "color": "#e6194b", "total": 94.8, "cats": {"agent": 91.7, "coding": 96.2, "math": 100.0, "dialogue": 81.7, "ruozhiba": 97.5, "longctx": 95.0, "other": 97.5}, "ref": false, "totalC": 95.5, "easy": 94.9, "med": 93.1, "hard": 96.5, "mins": 105, "nq": 200}, {"name": "Ornith-35B-Heretic Q6", "color": "#3cb44b", "total": 94.5, "cats": {"agent": 92.3, "coding": 96.2, "math": 100.0, "dialogue": 82.5, "ruozhiba": 97.5, "longctx": 95.0, "other": 92.5}, "ref": false, "totalC": 95.0, "easy": 94.5, "med": 94.4, "hard": 94.3, "mins": 42, "nq": 200}, {"name": "Qwen3.8-27B-Unc Q8", "color": "#ff4444", "total": 94.0, "cats": {"agent": 88.2, "coding": 98.8, "math": 98.8, "dialogue": 79.2, "ruozhiba": 92.5, "longctx": 100.0, "other": 97.5}, "ref": false, "totalC": 94.8, "easy": 94.7, "med": 93.1, "hard": 91.5, "mins": 185, "nq": 200}, {"name": "Qwen3.5-4B Q4", "color": "#ffe119", "total": 93.9, "cats": {"agent": 91.8, "coding": 96.2, "math": 97.5, "dialogue": 83.3, "ruozhiba": 97.5, "longctx": 86.7, "other": 100.0}, "ref": false, "totalC": 94.4, "easy": 94.5, "med": 89.6, "hard": 96.5, "mins": 130, "nq": 200}, {"name": "Qwen3.6-35B-A3B Q5", "color": "#66ff99", "total": 93.4, "cats": {"agent": 88.9, "coding": 98.8, "math": 97.5, "dialogue": 83.3, "ruozhiba": 92.5, "longctx": 90.0, "other": 97.5}, "ref": false, "totalC": 94.3, "easy": 94.1, "med": 95.8, "hard": 85.3, "mins": 95, "nq": 200}, {"name": "Qwen3.5-4B Q8", "color": "#99ff66", "total": 93.3, "cats": {"agent": 92.1, "coding": 93.8, "math": 97.5, "dialogue": 88.3, "ruozhiba": 92.5, "longctx": 95.0, "other": 90.0}, "ref": false, "totalC": 94.0, "easy": 94.1, "med": 89.6, "hard": 93.8, "mins": 131, "nq": 200}, {"name": "GLM-5.3-Flash API 参照", "color": "#c0c0c0", "total": 93.1, "cats": {"agent": 90.9, "coding": 98.8, "math": 100.0, "dialogue": 80.0, "ruozhiba": 100.0, "longctx": 76.7, "other": 95.0}, "ref": true, "totalC": 93.8, "easy": 91.6, "med": 97.2, "hard": 95.7, "mins": 45, "nq": 200}, {"name": "Qwen3.5-9B Q8", "color": "#3399ff", "total": 93.0, "cats": {"agent": 94.1, "coding": 97.5, "math": 97.5, "dialogue": 85.8, "ruozhiba": 97.5, "longctx": 78.3, "other": 90.0}, "ref": false, "totalC": 93.7, "easy": 92.2, "med": 92.6, "hard": 97.9, "mins": 162, "nq": 200}, {"name": "Qwen3.5-9B-MTP Q4", "color": "#0082c8", "total": 92.4, "cats": {"agent": 92.2, "coding": 96.2, "math": 97.5, "dialogue": 90.0, "ruozhiba": 92.5, "longctx": 85.0, "other": 85.0}, "ref": false, "totalC": 92.9, "easy": 92.4, "med": 94.7, "hard": 89.6, "mins": 102, "nq": 200}, {"name": "Ornith-1.5-9B Q8", "color": "#ffaa33", "total": 92.0, "cats": {"agent": 94.4, "coding": 97.5, "math": 97.5, "dialogue": 80.0, "ruozhiba": 90.0, "longctx": 81.7, "other": 90.0}, "ref": false, "totalC": 92.8, "easy": 90.7, "med": 95.8, "hard": 94.4, "mins": 60, "nq": 200}, {"name": "Ornith-9B官方Q4", "color": "#cc8800", "total": 92.3, "cats": {"agent": 87.7, "coding": 97.5, "math": 97.5, "dialogue": 83.3, "ruozhiba": 92.5, "longctx": 91.7, "other": 90.0}, "ref": false, "totalC": 92.5, "easy": 91.5, "med": 93.1, "hard": 95.7, "mins": 53, "nq": 200}, {"name": "Ornith-1.5-9B Q4", "color": "#f58231", "total": 91.5, "cats": {"agent": 91.9, "coding": 95.0, "math": 100.0, "dialogue": 82.5, "ruozhiba": 92.5, "longctx": 76.7, "other": 90.0}, "ref": false, "totalC": 92.0, "easy": 89.2, "med": 95.8, "hard": 98.6, "mins": 60, "nq": 200}, {"name": "Spark-X2.5-4B Q8", "color": "#911eb4", "total": 91.2, "cats": {"agent": 90.3, "coding": 88.8, "math": 100.0, "dialogue": 79.2, "ruozhiba": 92.5, "longctx": 90.0, "other": 92.5}, "ref": false, "totalC": 92.0, "easy": 91.7, "med": 90.3, "hard": 89.6, "mins": 68, "nq": 200}, {"name": "gemma-4-E4B Q8", "color": "#66ccff", "total": 91.3, "cats": {"agent": 86.5, "coding": 98.8, "math": 97.5, "dialogue": 90.8, "ruozhiba": 85.0, "longctx": 86.7, "other": 85.0}, "ref": false, "totalC": 91.6, "easy": 91.2, "med": 94.4, "hard": 87.4, "mins": 63, "nq": 200}, {"name": "gemma-4-E4B Q4", "color": "#46f0f0", "total": 90.6, "cats": {"agent": 87.7, "coding": 97.5, "math": 97.5, "dialogue": 89.2, "ruozhiba": 90.0, "longctx": 71.7, "other": 90.0}, "ref": false, "totalC": 90.9, "easy": 90.0, "med": 93.8, "hard": 89.4, "mins": 49, "nq": 200}, {"name": "Ling-3.0-tiny Q4", "color": "#f032e6", "total": 90.0, "cats": {"agent": 92.6, "coding": 95.0, "math": 97.5, "dialogue": 80.0, "ruozhiba": 87.5, "longctx": 70.0, "other": 92.5}, "ref": false, "totalC": 90.8, "easy": 89.1, "med": 93.3, "hard": 90.3, "mins": 67, "nq": 200}, {"name": "Ling-3.0-tiny Q8", "color": "#ff99cc", "total": 88.7, "cats": {"agent": 89.5, "coding": 98.8, "math": 90.0, "dialogue": 87.5, "ruozhiba": 85.0, "longctx": 67.5, "other": 90.0}, "ref": false, "totalC": 89.9, "easy": 88.3, "med": 89.6, "hard": 89.4, "mins": 52, "nq": 200}, {"name": "LFM2.5-2.6B Q8", "color": "#bcf60c", "total": 88.5, "cats": {"agent": 89.1, "coding": 97.5, "math": 97.5, "dialogue": 80.8, "ruozhiba": 90.0, "longctx": 58.3, "other": 87.5}, "ref": false, "totalC": 88.7, "easy": 87.4, "med": 90.5, "hard": 91.7, "mins": 39, "nq": 200}, {"name": "gemma-4-E2B Q8", "color": "#fabebe", "total": 86.5, "cats": {"agent": 84.7, "coding": 95.0, "math": 100.0, "dialogue": 83.3, "ruozhiba": 75.0, "longctx": 74.2, "other": 72.5}, "ref": false, "totalC": 86.7, "easy": 85.3, "med": 88.4, "hard": 90.3, "mins": 33, "nq": 200}, {"name": "Spark-X2.5-1.7B Q8", "color": "#008080", "total": 85.3, "cats": {"agent": 87.0, "coding": 80.0, "math": 90.0, "dialogue": 81.7, "ruozhiba": 87.5, "longctx": 85.0, "other": 85.0}, "ref": false, "totalC": 85.8, "easy": 86.2, "med": 83.1, "hard": 83.3, "mins": 55, "nq": 200}, {"name": "mincpm5 2b q8", "color": "#888888", "total": 84.5, "cats": {"agent": 61.0, "coding": 93.8, "math": 92.5, "dialogue": 72.5, "ruozhiba": 85.0, "longctx": 100.0, "other": 92.5}, "ref": false, "totalC": 85.2, "easy": 86.2, "med": 77.1, "hard": 85.4, "mins": 100, "nq": 200}, {"name": "Qwen3.5-2B Q8", "color": "#9a6324", "total": 82.3, "cats": {"agent": 85.0, "coding": 81.2, "math": 90.0, "dialogue": 76.7, "ruozhiba": 82.5, "longctx": 64.2, "other": 87.5}, "ref": false, "totalC": 82.6, "easy": 84.5, "med": 80.8, "hard": 72.2, "mins": 117, "nq": 200}, {"name": "MiniCPM4-8B Q4", "color": "#cc66ff", "total": 75.5, "cats": {"agent": 45.7, "coding": 96.2, "math": 82.5, "dialogue": 75.8, "ruozhiba": 90.0, "longctx": 55.0, "other": 85.0}, "ref": false, "totalC": 75.7, "easy": 76.2, "med": 76.4, "hard": 69.9, "mins": 14, "nq": 200}, {"name": "mincpm5 1b q8", "color": "#888888", "total": 74.9, "cats": {"agent": 69.2, "coding": 77.5, "math": 82.5, "dialogue": 65.0, "ruozhiba": 77.5, "longctx": 70.0, "other": 78.3}, "ref": false, "totalC": 75.4, "easy": 75.8, "med": 78.9, "hard": 64.1, "mins": 68, "nq": 200}, {"name": "LFM2.5-8B-A1B Q8", "color": "#808000", "total": 73.6, "cats": {"agent": 74.3, "coding": 86.2, "math": 87.5, "dialogue": 54.2, "ruozhiba": 75.0, "longctx": 50.7, "other": 60.0}, "ref": false, "totalC": 73.9, "easy": 71.8, "med": 80.8, "hard": 73.1, "mins": 18, "nq": 200}, {"name": "Qwen3.5-0.8B Q8", "color": "#000075", "total": 62.8, "cats": {"agent": 77.9, "coding": 47.5, "math": 55.0, "dialogue": 71.7, "ruozhiba": 67.5, "longctx": 60.0, "other": 67.5}, "ref": false, "totalC": 63.3, "easy": 67.3, "med": 56.7, "hard": 45.0, "mins": 120, "nq": 200}, {"name": "mincpm1b fable5 q8", "color": "#888888", "total": 60.9, "cats": {"agent": 48.8, "coding": 76.2, "math": 65.0, "dialogue": 51.7, "ruozhiba": 65.0, "longctx": 45.0, "other": 67.5}, "ref": false, "totalC": 62.6, "easy": 65.1, "med": 57.6, "hard": 41.2, "mins": 78, "nq": 200}, {"name": "RWKV7-G1j-1.5B Q8", "color": "#ddaaa0", "total": 55.8, "cats": {"agent": 50.6, "coding": 37.5, "math": 67.5, "dialogue": 74.2, "ruozhiba": 80.0, "longctx": 20.0, "other": 72.5}, "ref": false, "totalC": 56.0, "easy": 58.0, "med": 51.4, "hard": 49.3, "mins": 115, "nq": 200}, {"name": "RWKV7-g1i-1.5B Q8", "color": "#fffac8", "total": 54.7, "cats": {"agent": 44.7, "coding": 37.5, "math": 65.0, "dialogue": 61.7, "ruozhiba": 82.5, "longctx": 21.2, "other": 87.5}, "ref": false, "totalC": 54.7, "easy": 58.5, "med": 43.1, "hard": 50.4, "mins": 157, "nq": 200}, {"name": "RWKV7-G1j-2.9B Q4", "color": "#aaaaff", "total": 41.2, "cats": {"agent": 38.2, "coding": 25.0, "math": 40.0, "dialogue": 48.8, "ruozhiba": 62.5, "longctx": 21.7, "other": 72.5}, "ref": false, "totalC": 41.2, "easy": 47.5, "med": 27.8, "hard": 24.6, "mins": 230, "nq": 200}, {"name": "mincpm1b agentic q8", "color": "#888888", "total": 37.5, "cats": {"agent": 25.6, "coding": 36.2, "math": 40.0, "dialogue": 45.8, "ruozhiba": 45.0, "longctx": 27.5, "other": 53.3}, "ref": false, "totalC": 37.5, "easy": 43.5, "med": 13.9, "hard": 38.5, "mins": 145, "nq": 200}, {"name": "mincpm1b antihallu q8 partial", "color": "#888888", "total": 1.7, "cats": {"agent": 5.0, "coding": 0.0, "math": 0.0, "dialogue": 6.7, "ruozhiba": 0.0}, "ref": false, "totalC": 1.7, "easy": 3.3, "med": 0.0, "hard": 0.0, "mins": 2, "nq": 40}, {"name": "RWKV7-G1j-2.9B Q4 · demo采样/8192/思考", "color": "#f0a000", "total": 48.3, "cats": {"agent": 38.5, "coding": 40.0, "math": 45.0, "dialogue": 59.6, "ruozhiba": 70.0, "longctx": 39.0, "other": 67.5}, "ref": false, "totalC": 48.3, "easy": 52.4, "med": 40.3, "hard": 36.3, "mins": 214, "nq": 200}, {"name": "RWKV7-G1j-2.9B Q4 · 官方demo/500/关思考", "color": "#20c997", "total": 44.2, "cats": {"agent": 35.6, "coding": 41.2, "math": 30.0, "dialogue": 59.6, "ruozhiba": 85.0, "longctx": 18.7, "other": 65.0}, "ref": false, "totalC": 44.2, "easy": 51.0, "med": 23.6, "hard": 35.6, "mins": 14, "nq": 200}, {"name": "RWKV7-G1j-2.9B Q4 · demo采样/8192/关思考", "color": "#b06cf0", "total": 43.4, "cats": {"agent": 35.2, "coding": 52.5, "math": 32.5, "dialogue": 52.5, "ruozhiba": 50.0, "longctx": 23.3, "other": 67.5}, "ref": false, "totalC": 43.4, "easy": 45.9, "med": 37.5, "hard": 37.4, "mins": 117, "nq": 200}, {"name": "RWKV7-G1j-2.9B Q4 · demo采样/500/思考", "color": "#e05c8a", "total": 37.9, "cats": {"agent": 42.8, "coding": 1.2, "math": 27.5, "dialogue": 62.5, "ruozhiba": 75.0, "longctx": 27.2, "other": 70.8}, "ref": false, "totalC": 37.9, "easy": 43.2, "med": 26.4, "hard": 23.7, "mins": 19, "nq": 200}, {"name": "RWKV7-G1j-2.9B Q8 · 官方demo/500/关思考", "color": "#00b3b3", "total": 64.1, "cats": {"agent": 46.4, "coding": 80.0, "math": 57.5, "dialogue": 70.4, "ruozhiba": 85.0, "longctx": 30.0, "other": 87.5}, "ref": false, "totalC": 64.1, "easy": 68.8, "med": 55.6, "hard": 49.0, "mins": 15, "nq": 200}];
+const CATS = ["agent","coding","math","dialogue","longctx","ruozhiba","other"];
+const CATS_ZH = {agent:"Agent 能力",coding:"编码能力",math:"数学能力",dialogue:"对话能力",longctx:"长上下文",ruozhiba:"脑筋急转弯",other:"其他"};
+const W = {agent:.2,coding:.2,math:.2,dialogue:.1,ruozhiba:.1,longctx:.1,other:.1};
+const sel = new Set(DATA.slice(0,6).map(d=>d.name));
+document.getElementById("meta").textContent =
+  `xLeaves Benchmark v3 · 端侧模型能力基准 · 200 题 · 7 类配权 20/20/20/10/10/10/10 · 难度 1-10 · KV 统一 q8_0 · temp 0.2（对话 0.7）· max_tokens 8192 · 报告更新于 ${new Date().toLocaleString("zh-CN")}`;
+
+function renderCks(){
+  const el=document.getElementById("cks");
+  el.innerHTML=DATA.map(d=>`<label class="ck ${sel.has(d.name)?"":"off"}">
+    <input type="checkbox" ${sel.has(d.name)?"checked":""} data-n="${d.name}">
+    <span class="dot" style="background:${d.color}"></span>${d.name}</label>`).join("");
+  el.querySelectorAll("input").forEach(i=>i.onchange=()=>{i.checked?sel.add(i.dataset.n):sel.delete(i.dataset.n);renderAll();});
+}
+function radar(){
+  const list=DATA.filter(d=>sel.has(d.name));
+  const CX=380,CY=340,R=250,N=CATS.length;
+  const pt=(i,v)=>{const a=-Math.PI/2+i*2*Math.PI/N;return [CX+Math.cos(a)*R*v/100,CY+Math.sin(a)*R*v/100];};
+  let s=`<svg viewBox="0 0 760 700" style="max-width:100%">`;
+  for(let g=1;g<=5;g++){
+    const v=g*20;
+    s+=`<polygon points="${CATS.map((c,i)=>pt(i,v).map(x=>x.toFixed(1)).join(",")).join(" ")}" fill="none" stroke="#263140" stroke-width="1"/>`;
+    s+=`<text x="${CX+6}" y="${CY-R*v/100+4}" font-size="11" fill="#5c6b7d">${v}</text>`;
+  }
+  CATS.forEach((c,i)=>{
+    const [x,y]=pt(i,100);
+    s+=`<line x1="${CX}" y1="${CY}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#263140" stroke-width="1"/>`;
+    const [lx,ly]=pt(i,121);
+    s+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="14" fill="#cfd8e3" font-weight="600">${CATS_ZH[c]}<tspan fill="#66788c" font-size="11" font-weight="400"> ${W[c]*100}%</tspan></text>`;
+  });
+  list.forEach(d=>{
+    const ps=CATS.map((c,i)=>pt(i,d.cats[c]||0));
+    s+=`<polygon points="${ps.map(p=>p.map(x=>x.toFixed(1)).join(",")).join(" ")}" fill="${d.color}" fill-opacity="0.10" stroke="${d.color}" stroke-width="2.2"><title>${d.name}（总分 ${d.total}）
+${CATS.map(c=>CATS_ZH[c]+" "+(d.cats[c]??0).toFixed(1)+"%").join(" · ")}</title></polygon>`;
+    ps.forEach((p,i)=>{s+=`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="3.4" fill="${d.color}"><title>${d.name} · ${CATS_ZH[CATS[i]]} ${(d.cats[CATS[i]]??0).toFixed(1)}%</title></circle>`;});
+  });
+  s+=`<text x="${CX}" y="${CY+4}" text-anchor="middle" font-size="11" fill="#46586c">0</text></svg>`;
+  return s;
+}
+function renderRadar(){document.getElementById("radar").innerHTML=radar();}
+function renderCmp(){
+  const list=DATA.filter(d=>sel.has(d.name));
+  let h="<tr><td class='l'>模型</td>"+CATS.map(c=>`<th>${CATS_ZH[c]}</th>`).join("")+"<th>raw</th><th>修正后★</th></tr>";
+  list.forEach(d=>{
+    h+=`<tr><td class="l"><span class="dot" style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${d.color};margin-right:5px"></span>${d.name}</td>`
+      +CATS.map(c=>`<td>${(d.cats[c]??0).toFixed(1)}</td>`).join("")+`<td>${d.total.toFixed(1)}</td><td><b style="color:#ffd700">${d.totalC.toFixed(1)}</b></td></tr>`;
+  });
+  document.getElementById("cmp").innerHTML=h;
+}
+let sortKey="totalC",asc=false,refMode=false;
+function renderBoard(){
+  const cols=[["name","模型",d=>d.name,"l"],["totalC","修正后总分★",d=>d.totalC],["total","raw总分",d=>d.total],["easy","easy",d=>d.easy],["med","med",d=>d.med],["hard","hard",d=>d.hard],["mins","耗时m",d=>d.mins],["nq","题数",d=>d.nq]].concat(CATS.map(c=>[c,CATS_ZH[c],d=>d.cats[c]??0]));
+  const arr=DATA.filter(d=>d.ref===refMode).sort((a,b)=>{const f=cols.find(c=>c[0]===sortKey)[2];const x=f(a),y=f(b);return(typeof x==="string"?x.localeCompare(y):x-y)*(asc?1:-1);});
+  let h="<tr>"+cols.map(c=>`<th data-k="${c[0]}">${c[1]}${sortKey===c[0]?(asc?" ▲":" ▼"):""}</th>`).join("")+"</tr>";
+  arr.forEach((d,i)=>{
+    const rk=i+1,cls=rk===1?"rank1":rk===2?"rank2":rk===3?"rank3":"";
+    h+=`<tr><td class="l"><span class="${cls}" style="margin-right:6px">${rk}</span>${d.name}</td><td><b style="color:#ffd700">${d.totalC.toFixed(1)}</b></td><td>${d.total.toFixed(1)}</td>
+    <td>${d.easy}</td><td>${d.med}</td><td>${d.hard}</td><td>${d.mins}</td><td>${d.nq}</td>`
+    +CATS.map(c=>{const v=d.cats[c]??0;return `<td><div class="bar" title="${v}"><i style="width:${v}%;background:${d.color}"></i></div><span style="font-size:11px;color:#9aa4b2">${v.toFixed(0)}</span></td>`;}).join("")+"</tr>";
+  });
+  const b=document.getElementById(refMode?"refboard":"board");b.innerHTML=h;
+  b.querySelectorAll("th").forEach(t=>t.onclick=()=>{const k=t.dataset.k;if(sortKey===k)asc=!asc;else{sortKey=k;asc=typeof cols.find(c=>c[0]===k)[2]({name:""})==="string";}renderBoard();renderRef();});
+}
+function renderRef(){const keep=refMode,ka=asc,ks=sortKey;refMode=true;renderBoard();refMode=keep;asc=ka;sortKey=ks;}
+function renderAll(){renderCks();renderRadar();renderCmp();renderBoard();renderRef();}
+renderAll();
+</script>
+</body>
+</html>

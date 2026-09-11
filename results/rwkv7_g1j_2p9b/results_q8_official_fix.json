@@ -1,0 +1,120 @@
+{
+ "model": "rwkv29-g1j-q8",
+ "base_url": "http://127.0.0.1:18860",
+ "sampling": {
+  "temperature": 1.0,
+  "top_p": 0.5,
+  "top_k": 500,
+  "min_p": 0.0,
+  "repeat_last_n": 0,
+  "repeat_penalty": 1.0,
+  "presence_penalty": 0.0,
+  "frequency_penalty": 0.0,
+  "rwkv_count_penalty": 0.1,
+  "rwkv_presence_penalty": 1.0,
+  "rwkv_penalty_decay": 0.99
+ },
+ "chat_template_kwargs": {
+  "enable_thinking": false
+ },
+ "results": [
+  {
+   "score": 1.0,
+   "note": "matched 5/5",
+   "answer": "",
+   "head": "根据您的需求，我为您规划了一个周末北京一日游行程，总预算控制在300元内，必须包含故宫，且其中一人不吃辣。以下是详细安排：\n### 行程概览\n- **时间**：周六上午9:00出发，周日17:00前返回西二旗。\n- **交通方式**：地铁（经济实惠，无需额外费用）。\n- **住宿**：入住北京某经济型酒店（价格约100元/晚），全天使用房间。\n- **餐饮**：自带食物（如面包、水果、牛奶等），仅用于午餐和夜宵，总花费约50元。\n- **门票**：故宫门票约60元/人，总计120元。\n- **其他费用**：预留50元应急，如购买零食或纪念品。\n### 详细行程\n#### 周六上午\n- **9:",
+   "secs": 6.4,
+   "usage": {
+    "completion_tokens": 500,
+    "prompt_tokens": 73,
+    "total_tokens": 573,
+    "prompt_tokens_details": {
+     "cached_tokens": 1
+    }
+   },
+   "id": "Q02",
+   "cat": "agent",
+   "difficulty": 2,
+   "tier": "easy"
+  },
+  {
+   "score": 0.5,
+   "note": "matched 1/2",
+   "answer": "",
+   "head": "1+1等于2。这是一个基本的算术问题，无需搜索工具即可直接回答。",
+   "secs": 0.5,
+   "usage": {
+    "completion_tokens": 33,
+    "prompt_tokens": 64,
+    "total_tokens": 97,
+    "prompt_tokens_details": {
+     "cached_tokens": 1
+    }
+   },
+   "id": "Q03",
+   "cat": "agent",
+   "difficulty": 3,
+   "tier": "easy"
+  },
+  {
+   "score": 0.5,
+   "note": "calls 0/1; matched 1/1; rounds=1",
+   "calls": [],
+   "answer": "好的，我来为您查询上海今天的天气。\n根据最新数据，**上海今天（2023年10月11日）的天气预报如下：**\n*   **天气状况：** 多云转阴，局部有阵雨或雷阵雨。\n*   **气温范围：** 白天最高气温约 **28℃**，夜间最低气温约 **21℃**。\n*   **风力风向：** 西南风3-4级，阵风5-6级。\n*   **降水概率：** **40%**。\n请注意，天气可能会有小幅变化，出行前建议通过手机天气App或其他可靠渠道进行最终确认。祝您今天出行顺利！",
+   "head": "好的，我来为您查询上海今天的天气。\n根据最新数据，**上海今天（2023年10月11日）的天气预报如下：**\n*   **天气状况：** 多云转阴，局部有阵雨或雷阵雨。\n*   **气温范围：** 白天最高气温约 **28℃**，夜间最低气温约 **21℃**。\n*   **风力风向：** 西南风3-4级，阵风5-6级。\n*   **降水概率：** **40%**。\n请注意，天气可能会有小幅变化，出行前建议通过手机天气App或其他可靠渠道进行最终确认。祝您今天出行顺利！",
+   "secs": 2.6,
+   "usage": {
+    "completion_tokens": 198,
+    "prompt_tokens": 28,
+    "total_tokens": 226,
+    "prompt_tokens_details": {
+     "cached_tokens": 1
+    }
+   },
+   "id": "Q04",
+   "cat": "agent",
+   "difficulty": 4,
+   "tier": "easy"
+  },
+  {
+   "score": 0.5,
+   "note": "calls 0/1; matched 1/1; rounds=1",
+   "calls": [],
+   "answer": "好的，没问题！根据您提供的信息，我已为您创建了一份详细的日程安排。\n**当前日期：** 2026年9月9日（星期三）\n**明天下午3点开始：** 周报评审会\n---\n### **2026年9月10日（周四）日程安排**\n| 时间 | 活动 | 备注 |\n| :--- | :--- | :--- |\n| **14:00 - 15:30** | **周报评审会** | **核心任务**。请确保所有相关人员准时参加。 |\n| **15:30 - 16:00** | **项目复盘与计划制定** | 会议结束后，进行简短的项目复盘，并讨论下一周的工作计划。 |\n| **16:00 - 17:00** | **个人时间/其他事务** | 可用于处理非紧急的个人事务或放松。 |\n---\n### **如何使用此日程表？**\n1.  **记录：** 请将这份日程表记录在您的日历或笔记本中。\n2.  **提醒",
+   "head": "好的，没问题！根据您提供的信息，我已为您创建了一份详细的日程安排。\n**当前日期：** 2026年9月9日（星期三）\n**明天下午3点开始：** 周报评审会\n---\n### **2026年9月10日（周四）日程安排**\n| 时间 | 活动 | 备注 |\n| :--- | :--- | :--- |\n| **14:00 - 15:30** | **周报评审会** | **核心任务**。请确保所有相关人员准时参加。 |\n| **15:30 - 16:00** | **项目复盘与计划制定** | 会议结束后，进行简短的项目复盘，并讨论下一周的工作计划。 |\n| **16:00 - 17:00** |",
+   "secs": 5.2,
+   "usage": {
+    "completion_tokens": 398,
+    "prompt_tokens": 51,
+    "total_tokens": 449,
+    "prompt_tokens_details": {
+     "cached_tokens": 1
+    }
+   },
+   "id": "Q05",
+   "cat": "agent",
+   "difficulty": 5,
+   "tier": "easy"
+  },
+  {
+   "score": 0.5,
+   "note": "calls 0/1; exact(fallback); rounds=1",
+   "calls": [],
+   "answer": "17 × 23 = 391",
+   "head": "17 × 23 = 391",
+   "secs": 0.2,
+   "usage": {
+    "completion_tokens": 8,
+    "prompt_tokens": 29,
+    "total_tokens": 37,
+    "prompt_tokens_details": {
+     "cached_tokens": 1
+    }
+   },
+   "id": "Q06",
+   "cat": "agent",
+   "difficulty": 6,
+   "tier": "easy"
+  }
+ ]
+}
